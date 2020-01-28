@@ -8,6 +8,12 @@
  *  В версии 0.0.5
  *  Отличается полностью от предыдущей. И переписывается заново.
 */
+#define ERROR_bl  Serial.println("ERROR_bl");
+#define ERROR_br  Serial.println("ERROR_br");
+#define ERROR_fl  Serial.println("ERROR_br");
+#define ERROR_fr  Serial.println("ERROR_fr");
+// дописать функции обработки ошибок
+
 // блок констант характерезующий параметры шасси данные в мм.
 //════════════════════════════════════════════════════════╗
 const int16_t  weelbase            = 300; // колесная база                    (по ТЗ bPfP)          ║
@@ -175,9 +181,106 @@ uint16_t read_radius() {
   return (int16_t(Rv));
 }
 
-// 65535 (62745 тиков-примерно одна секунда)за одну секунду набегает, 
+
+//
+// (62745 тиков-примерно одна секунда)
 // если мы ориентируемся примерно на 1сек, то порядок частот примерно от 0-70 оборотов в секунду
 // то uint16_t, 0- 65535 вполне может характеризовать наши частоты, от 0 до 655,35 это об/сек максимальное 39321 об/мин
+// Предполагается, что колеса вращаются не с постоянной частотой. Если они решат крутится с постоянной частотой то это фиаско.
+void CalibrationWhels () { //взаимная калибровка радиусов, колес по соотношению частот вращения при движении по прямой.
+  const uint16_t   oneSecond = 62745; //число тиков в одной секунде
+  uint8_t    TimeCalibration = 20;    // число оборотов на основании которых вычисляется соотношение колес
+  int8_t Flag_1 = 4;                  // флаг подсчета изменения оборотов
+  const int32_t ForFlaf=2000000;// ожидание колес
+  int32_t Flag_2 = ForFlaf;           // ожидание колес
+  uint32_t   SumWbl                  = 0; // Сумма частот вращения заднего левого  колеса
+  uint32_t   SumWbr                  = 0; // Сумма частот вращения заднего правого колеса
+  uint32_t   SumWfl                  = 0; // Сумма частот вращения переднего левого колеса
+  uint32_t   SumWfr                  = 0; // Сумма частот вращения переднего правого колеса
+  //ждем, пока все колеса не начнут крутится с частотой более 1герц
+  
+  while (tWbl < oneSecond ) {
+    if (!Flag_2) {
+      ERROR_bl
+    };
+    --Flag_2;
+  }
+  Flag_2 = ForFlaf;
+  while (tWbr < oneSecond ) {
+    if (!Flag_2) {
+      ERROR_br
+    }
+    --Flag_2;
+  }
+  Flag_2 = ForFlaf;
+  while (tWfl < oneSecond ) {
+    if (!Flag_2) {
+      ERROR_fl
+    }
+    --Flag_2;
+  }
+  Flag_2 = ForFlaf;
+  while (tWfr < oneSecond ) {
+    if (!Flag_2) {
+      ERROR_fr
+    }
+    --Flag_2;
+  }
+  tWbl = 0;
+  tWbr = 0;
+  tWfl = 0;
+  tWfr = 0;
+  uint32_t   OldtWbl                  = tWbl; // фактическое время одного оборота заднего левого  колеса
+  uint32_t   OldtWbr                  = tWbr; // фактическое время одного оборота  заднего правого колеса
+  uint32_t   OldtWfl                  = tWfl; // фактическое время одного оборота переднего левого колеса
+  uint32_t   OldtWfr                  = tWfr; // фактическое время одного оборота  переднего правого колеса
+
+  while (TimeCalibration) {//наблюдаем за изменением периода это гарантирует, что мы не накопим одно измерение периода
+    if (OldtWbl - tWbl) {
+      Flag_1--;
+    }
+    if (OldtWbr - tWbr) {
+      Flag_1--;
+    }
+    if (OldtWbl - tWbl) {
+      Flag_1--;
+    }
+    if (OldtWbr - tWbr) {
+      Flag_1--;
+    }
+    if (!Flag_1) {
+      SumWbl += oneSecond / tWbl;
+      SumWbr += oneSecond / tWbr;
+      SumWfl += oneSecond / tWfl;
+      SumWfr += oneSecond / tWfr;
+      TimeCalibration--;
+    }
+
+  }
+  uint32_t Sum = (SumWbl + SumWbr + SumWfl + SumWfr) * rdWhell / 4;
+  if (!SumWbl) {
+    Wbl = Sum / SumWbl;
+  } else {
+    ERROR_bl
+  }
+  if (!SumWbr) {
+    Wbr = Sum / SumWbr;
+  } else {
+    ERROR_br
+  }
+  if (!SumWfl) {
+    Wfl = Sum / SumWfl;
+  } else {
+    ERROR_fl
+  }
+  if (!SumWfr) {
+    Wfr = Sum / SumWfr;
+  } else {
+    ERROR_fr
+  }
+}
+
+
 
 void loop() {
   
